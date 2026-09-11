@@ -1,6 +1,9 @@
 packages:
   - "apps/*"
 
+# CI/Vercel: lockfile já versionado — evita prompt interativo de supply-chain
+trustLockfile: true
+
 allowBuilds:
   "@embedded-postgres/darwin-arm64": true
   "@embedded-postgres/darwin-x64": true
