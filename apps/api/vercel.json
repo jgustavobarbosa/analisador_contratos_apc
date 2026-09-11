@@ -2,8 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "cd ../.. && CI=1 pnpm install --frozen-lockfile --config.trust-lockfile=true",
-  "buildCommand": "cd ../.. && pnpm --filter web build",
-  "outputDirectory": "dist",
+  "buildCommand": "cd ../.. && pnpm --filter web build && rm -rf apps/api/www && mkdir -p apps/api/www && cp -R apps/web/dist/. apps/api/www/",
+  "outputDirectory": "www",
   "rewrites": [
     { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]

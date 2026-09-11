@@ -19,3 +19,4 @@ apps/api/test/.pg-test-state.json
 .pnpm-store
 .vercel
 CONTRATO UNIMED.zip
+apps/api/www
