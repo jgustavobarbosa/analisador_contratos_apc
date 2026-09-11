@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, hasPermission, type Me } from './api';
+import {
+  api,
+  DEMO_ME,
+  hasPermission,
+  isDemoSession,
+  setDemoSession,
+  type Me,
+} from './api';
 import { BrandLogo } from './components/BrandLogo';
 import { LoginPage } from './features/auth/LoginPage';
 import { ResetConfirmPage } from './features/auth/ResetConfirmPage';
@@ -33,12 +40,23 @@ export function App() {
   const [authView, setAuthView] = useState<AuthView>(initialAuthView);
   const [tab, setTab] = useState<AppTab>('dashboard');
   const [message, setMessage] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const resetToken = useMemo(() => tokenFromUrl(), []);
 
   const refreshMe = useCallback(async () => {
+    if (isDemoSession()) {
+      setMe(DEMO_ME);
+      setDemoMode(true);
+      return;
+    }
     const res = await api<Me>('/me');
-    if (res.ok && res.data) setMe(res.data);
-    else setMe(null);
+    if (res.ok && res.data) {
+      setMe(res.data);
+      setDemoMode(false);
+    } else {
+      setMe(null);
+      setDemoMode(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -46,7 +64,11 @@ export function App() {
   }, [refreshMe]);
 
   async function onLogout() {
-    await api('/auth/logout', { method: 'POST' });
+    if (!isDemoSession()) {
+      await api('/auth/logout', { method: 'POST' });
+    }
+    setDemoSession(false);
+    setDemoMode(false);
     setMe(null);
     setTab('dossier');
     setMessage(null);
@@ -75,6 +97,7 @@ export function App() {
       <LoginPage
         onLoggedIn={(user) => {
           setMe(user);
+          setDemoMode(isDemoSession());
           setAuthView('login');
           setMessage(null);
         }}
@@ -105,6 +128,11 @@ export function App() {
                 </span>
               </span>
             </div>
+            {demoMode ? (
+              <span className="rounded-full border border-ray-warning/40 bg-ray-warning/10 px-2.5 py-1 text-[11px] font-semibold text-ray-warning">
+                Modo Demonstração
+              </span>
+            ) : null}
           </div>
           <div className="min-w-0">
             <h1 className="m-0 text-lg font-semibold tracking-tight text-white sm:text-xl md:text-2xl">

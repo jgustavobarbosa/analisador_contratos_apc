@@ -1,5 +1,11 @@
 import { FormEvent, useState } from 'react';
-import { api, type Me } from '../../api';
+import {
+  api,
+  apiBaseUrl,
+  DEMO_ME,
+  setDemoSession,
+  type Me,
+} from '../../api';
 import { BrandLogo } from '../../components/BrandLogo';
 
 type Props = {
@@ -11,19 +17,34 @@ export function LoginPage({ onLoggedIn, onGoReset }: Props) {
   const [email, setEmail] = useState('admin@example.com');
   const [password, setPassword] = useState('ChangeMeAdmin1!');
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const configuredApi = apiBaseUrl();
 
   async function onLogin(e: FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setBusy(true);
     const res = await api<Me>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+    setBusy(false);
     if (!res.ok || !res.data) {
-      setMessage('Falha no login');
+      setMessage(
+        res.error ??
+          (res.status === 401
+            ? 'Credenciais inválidas.'
+            : 'Falha no login. Verifique se a API está online.'),
+      );
       return;
     }
+    setDemoSession(false);
     onLoggedIn(res.data);
+  }
+
+  function onDemoLogin() {
+    setDemoSession(true);
+    onLoggedIn(DEMO_ME);
   }
 
   return (
@@ -33,10 +54,24 @@ export function LoginPage({ onLoggedIn, onGoReset }: Props) {
         Analisador de Contratos
       </h1>
       <p className="lede text-slate-400">
-        Acesso ao dossiê vivo — demonstração local do caso Unimed–Oncoradium.
+        Acesso ao dossiê vivo — demonstração do caso Unimed–Oncoradium.
       </p>
+
+      {!configuredApi ? (
+        <p className="mb-4 rounded-lg border border-ray-warning/40 bg-ray-warning/10 px-3 py-2 text-sm text-ray-warning">
+          Front no Vercel sem{' '}
+          <code className="text-xs">VITE_API_BASE_URL</code>. O login real
+          precisa da API Nest em outro host; use o modo demonstração abaixo ou
+          configure a variável no projeto Vercel.
+        </p>
+      ) : (
+        <p className="mb-4 text-xs text-slate-500">
+          API: <code className="text-ray-cyan">{configuredApi}</code>
+        </p>
+      )}
+
       <form
-        className="mt-6 grid gap-4 rounded-2xl border border-ray-border bg-ray-card bg-ray-gradient-subtle p-5"
+        className="mt-2 grid gap-4 rounded-2xl border border-ray-border bg-ray-card bg-ray-gradient-subtle p-5"
         onSubmit={(e) => void onLogin(e)}
       >
         <label className="grid gap-1 text-sm text-slate-300">
@@ -63,11 +98,21 @@ export function LoginPage({ onLoggedIn, onGoReset }: Props) {
         </label>
         <button
           type="submit"
-          className="rounded-lg bg-ray-blue px-4 py-2.5 font-semibold text-white"
+          disabled={busy}
+          className="rounded-lg bg-ray-blue px-4 py-2.5 font-semibold text-white disabled:opacity-60"
         >
-          Entrar
+          {busy ? 'Entrando…' : 'Entrar'}
         </button>
       </form>
+
+      <button
+        type="button"
+        onClick={onDemoLogin}
+        className="mt-3 w-full rounded-lg border border-ray-neon/40 bg-ray-neon/10 px-4 py-2.5 text-sm font-semibold text-ray-neon transition hover:bg-ray-neon/20"
+      >
+        Continuar em modo demonstração (sem API)
+      </button>
+
       <p className="auth-links mt-4">
         <button
           type="button"
