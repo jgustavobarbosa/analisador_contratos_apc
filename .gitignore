@@ -1,0 +1,21 @@
+node_modules
+dist
+build
+coverage
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+apps/api/tmp
+apps/api/data
+apps/api/storage/uploads
+apps/api/test/.embedded-pg
+apps/api/test/.pg-test-state.json
+.turbo
+*.tsbuildinfo
+.pnpm-store
+.vercel
+CONTRATO UNIMED.zip

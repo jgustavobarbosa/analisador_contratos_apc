@@ -1,0 +1,3 @@
+# src/core/ingestion (TRACK REAL)
+
+Bridge target for EPIC-1. Implementation today: `apps/api/src/modules/dossier` upload + extraction.

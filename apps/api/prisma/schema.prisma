@@ -1,0 +1,412 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationType {
+  prestador
+  operadora
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+model Organization {
+  id        String           @id @default(uuid())
+  tenantId  String           @unique
+  legalName String
+  document  String
+  type      OrganizationType
+  createdAt DateTime         @default(now())
+  users     User[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String               @id @default(uuid())
+  tenantId       String
+  organizationId String
+  email          String
+  passwordHash   String
+  status         UserStatus           @default(active)
+  roleId         String
+  createdAt      DateTime             @default(now())
+  lastLoginAt    DateTime?
+  failedLogins   Int                  @default(0)
+  lockedUntil    DateTime?
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  role           Role                 @relation(fields: [roleId], references: [id])
+  sessions       Session[]
+  resetTokens    PasswordResetToken[]
+  auditEvents    AuthAuditEvent[]     @relation("AuditActor")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  /// null = system/global role (seed)
+  tenantId    String?
+  code        String
+  name        String
+  users       User[]
+  permissions RolePermission[]
+
+  @@index([tenantId, code])
+  @@index([code])
+  @@map("roles")
+}
+
+model Permission {
+  id    String           @id @default(uuid())
+  code  String           @unique
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  ip        String?
+  userAgent String?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model AuthAuditEvent {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  actorUserId String?
+  action      String
+  target      String?
+  ip          String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([action])
+  @@map("auth_audit_events")
+}
+
+// --- Dossier (EPIC-2) — lean PoC; Extraction stubbed via golden seed ---
+
+enum ContractStatus {
+  active
+  archived
+}
+
+enum DocumentType {
+  contrato
+  aditivo
+  carta
+  comunicado
+}
+
+enum CoverageAction {
+  include
+  exclude
+}
+
+enum CausalRelation {
+  motivates
+  implements
+}
+
+model Contract {
+  id              String                    @id @default(uuid())
+  tenantId        String
+  partyA          String
+  partyB          String
+  title           String?
+  status          ContractStatus            @default(active)
+  createdAt       DateTime                  @default(now())
+  documents       ContractDocument[]
+  versions        DossierVersion[]
+  simulations     SimulationEvidence[]
+  complianceItems ComplianceChecklistItem[]
+
+  @@index([tenantId])
+  @@map("contracts")
+}
+
+model ContractDocument {
+  id                   String             @id @default(uuid())
+  contractId           String
+  type                 DocumentType
+  title                String
+  storageKey           String?
+  checksum             String?
+  uploadedBy           String?
+  uploadedAt           DateTime           @default(now())
+  catalogInstrumentId  String?
+  contract             Contract           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  catalogInstrument    CatalogInstrument? @relation(fields: [catalogInstrumentId], references: [id], onDelete: SetNull)
+  dates                DocumentDates?
+  causedVersions       DossierVersion[]
+  causalFrom           CausalLink[]       @relation("CausalFrom")
+  causalTo             CausalLink[]       @relation("CausalTo")
+  extractionBatches    ExtractionBatch[]
+
+  @@index([contractId])
+  @@index([catalogInstrumentId])
+  @@index([checksum])
+  @@map("contract_documents")
+}
+
+enum ExtractionBatchStatus {
+  pending
+  completed
+  failed
+}
+
+enum ExtractedFieldStatus {
+  pending_review
+  accepted
+  rejected
+}
+
+model ExtractionBatch {
+  id           String                @id @default(uuid())
+  documentId   String
+  modelVersion String                @default("assisted-json-v1")
+  status       ExtractionBatchStatus @default(pending)
+  createdAt    DateTime              @default(now())
+  document     ContractDocument      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fields       ExtractedField[]
+
+  @@index([documentId])
+  @@map("extraction_batches")
+}
+
+model ExtractedField {
+  id         String              @id @default(uuid())
+  batchId    String
+  path       String
+  valueJson  Json
+  confidence Float
+  status     ExtractedFieldStatus @default(pending_review)
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime            @default(now())
+  batch      ExtractionBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId])
+  @@index([status])
+  @@map("extracted_fields")
+}
+
+model DocumentDates {
+  id          String           @id @default(uuid())
+  documentId  String           @unique
+  eventAt     DateTime?
+  notifiedAt  DateTime?
+  signedAt    DateTime?
+  effectiveAt DateTime?
+  document    ContractDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_dates")
+}
+
+model DossierVersion {
+  id                 String            @id @default(uuid())
+  contractId         String
+  version            Int
+  effectiveFrom      DateTime
+  createdAt          DateTime          @default(now())
+  causedByDocumentId String?
+  snapshotHash       String?
+  summary            String?
+  contract           Contract          @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  causedByDocument   ContractDocument? @relation(fields: [causedByDocumentId], references: [id], onDelete: SetNull)
+  coverageItems      CoverageItem[]
+  priceItems         PriceItem[]
+
+  @@unique([contractId, version])
+  @@index([contractId, effectiveFrom])
+  @@map("dossier_versions")
+}
+
+model CoverageItem {
+  id               String         @id @default(uuid())
+  dossierVersionId String
+  code             String
+  action           CoverageAction
+  effectiveAt      DateTime
+  sourceDocumentId String?
+  version          DossierVersion @relation(fields: [dossierVersionId], references: [id], onDelete: Cascade)
+
+  @@index([dossierVersionId, code])
+  @@map("coverage_items")
+}
+
+model PriceItem {
+  id               String         @id @default(uuid())
+  dossierVersionId String
+  code             String
+  amount           Decimal        @db.Decimal(12, 2)
+  currency         String         @default("BRL")
+  effectiveAt      DateTime
+  effectiveUntil   DateTime?
+  sourceDocumentId String?
+  version          DossierVersion @relation(fields: [dossierVersionId], references: [id], onDelete: Cascade)
+
+  @@index([dossierVersionId, code])
+  @@map("price_items")
+}
+
+model CausalLink {
+  id             String            @id @default(uuid())
+  fromDocumentId String
+  toDocumentId   String
+  relation       CausalRelation
+  fromDocument   ContractDocument  @relation("CausalFrom", fields: [fromDocumentId], references: [id], onDelete: Cascade)
+  toDocument     ContractDocument  @relation("CausalTo", fields: [toDocumentId], references: [id], onDelete: Cascade)
+
+  @@unique([fromDocumentId, toDocumentId, relation])
+  @@map("causal_links")
+}
+
+// --- Normative catalog (EPIC-1/2 pontos 1–2) — metadata + local case-base PDFs ---
+
+enum CatalogSourceKind {
+  ans
+  cfm
+  associacao
+  jusbrasil
+  hospital
+  caso_base
+  outro
+}
+
+model CatalogInstrument {
+  id          String                       @id @default(uuid())
+  code        String                       @unique
+  title       String
+  sourceKind  CatalogSourceKind
+  sourceUrl   String?
+  localPath   String?
+  publisher   String?
+  summary     String?
+  tags        String[]                     @default([])
+  createdAt   DateTime                     @default(now())
+  dimensions  CatalogInstrumentDimension[]
+  documents   ContractDocument[]
+
+  @@index([sourceKind])
+  @@map("catalog_instruments")
+}
+
+model CatalogDimension {
+  id          String                       @id @default(uuid())
+  code        String                       @unique
+  name        String
+  description String?
+  instruments CatalogInstrumentDimension[]
+
+  @@map("catalog_dimensions")
+}
+
+model CatalogInstrumentDimension {
+  instrumentId String
+  dimensionId  String
+  notes        String?
+  instrument   CatalogInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  dimension    CatalogDimension  @relation(fields: [dimensionId], references: [id], onDelete: Cascade)
+
+  @@id([instrumentId, dimensionId])
+  @@map("catalog_instrument_dimensions")
+}
+
+// --- Simulation evidence (EPIC-3) — deterministic guide simulator ---
+
+model SimulationEvidence {
+  id             String   @id @default(uuid())
+  tenantId       String
+  contractId     String
+  code           String
+  attendanceAt   DateTime
+  informedAmount Decimal? @db.Decimal(12, 2)
+  expectedAmount Decimal? @db.Decimal(12, 2)
+  covered        Boolean
+  alerts         Json
+  riskNotes      Json?
+  actorUserId    String
+  batchId        String?
+  createdAt      DateTime @default(now())
+  contract       Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, contractId, createdAt])
+  @@index([batchId])
+  @@index([actorUserId])
+  @@map("simulation_evidence")
+}
+
+// --- Compliance RN510 (EPIC-5) — cadastral checklist + 60/30/7 alerts ---
+
+enum ComplianceItemStatus {
+  ok
+  expiring
+  expired
+  missing
+}
+
+model ComplianceChecklistItem {
+  id            String               @id @default(uuid())
+  tenantId      String
+  contractId    String?
+  code          String
+  title         String
+  requiredBy    String               @default("RN510/22")
+  dueAt         DateTime?
+  status        ComplianceItemStatus @default(missing)
+  evidenceDocId String?
+  updatedAt     DateTime             @updatedAt
+  createdAt     DateTime             @default(now())
+  contract      Contract?            @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, contractId, code])
+  @@index([tenantId, contractId])
+  @@index([dueAt])
+  @@map("compliance_checklist_items")
+}

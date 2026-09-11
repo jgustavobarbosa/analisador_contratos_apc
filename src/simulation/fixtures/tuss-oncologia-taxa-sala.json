@@ -1,0 +1,17 @@
+{
+  "track": "simulation",
+  "providerType": "oncologia",
+  "guide": {
+    "tissVersion": "3.05.00",
+    "codigoProcedimento": "89999959",
+    "dataAtendimento": "2024-08-02",
+    "valorInformado": 325.0,
+    "operadoraAns": "000000",
+    "prestadorCnpjFake": "00.000.000/0001-00"
+  },
+  "expectedDemo": {
+    "covered": true,
+    "expectedAmount": 325.0,
+    "notes": "Synthetic mirror of Unimed–Oncoradium chemo room fee — NOT production data"
+  }
+}

@@ -1,0 +1,99 @@
+# Role & Architecture Guidelines: RAY.IA Health Contract Analyzer
+
+You are an expert full-stack healthcare AI engineer building a high-performance PaaS platform for health plan contract auditing and revenue cycle management (Analisador Preditivo de Contratos — RAY.IA).
+
+## Two-Track Execution (MANDATORY)
+
+Never mix tracks. Label every artifact, fixture, seed, endpoint and UI surface.
+
+### TRACK REAL (Production)
+- Multi-tenant isolation (tenantId / future RLS), local-first LGPD, immutable dossier versioning, real OCR/extraction pipelines, human review before applying low-confidence fields.
+- Source of truth for contracts: tenant uploads + case-base PDFs under controlled storage — not Jusbrasil scrape dumps.
+- Normative catalog stores **metadata + URLs**, not verbatim proprietary model pieces.
+
+### TRACK SIMULATION (Client Demo)
+- Deterministic mock engines for hospital, clinic/SADT, home care, high-complexity lab, oncology — **no production beneficiary/PII**.
+- Synthetic TISS/TUSS payloads live only under `src/simulation/` (and mirrored demo seeds explicitly marked `track: simulation`).
+- Generators produce demo data by provider type; never write generator output into production tables without an explicit `track=simulation` flag and separate schema/prefix.
+
+**If unclear which track:** ask. Default new demo code to SIMULATION; default persistence of real contracts to REAL.
+
+## Epic Scope (EPIC-0 … EPIC-9)
+
+| Epic | Focus | Primary paths |
+|---|---|---|
+| EPIC-0 | Identity, RBAC, password recovery, user CRUD | `apps/api` identity, `docs/epics/EPIC-00-identity.md` |
+| EPIC-1 | Ingestion, OCR/extraction, review queue | `src/core/ingestion`, dossier upload |
+| EPIC-2 | Living dossier, vigency reconciliation | `src/core/dossier` |
+| EPIC-3 | Billing simulator / second opinion | `apps/api` simulation module, `src/simulation` |
+| EPIC-4 | Glosa risk (rules now; LightGBM when real history exists) | `src/ml/glosa` |
+| EPIC-5 | Compliance RN510/RN507/RDC36 radar | compliance module |
+| EPIC-6 | Traceability & audit trail | audit + timeline |
+| EPIC-7 | PaaS multi-tenant, billing, public API | `src/api` |
+| EPIC-8 | Process improvement analyzer / NN-adjacent | `src/ml/process_optimizer` |
+| EPIC-9 | Security, LGPD, sensitivity routing | security-gov |
+| EPIC-10 | Contract benchmark / custo-benefício | `src/ml/contract_benchmark` (scaffold) |
+| EPIC-11 | Catalog fraud / insumos antifraude | `src/ml/catalog_fraud` (scaffold) |
+
+Detailed specs: `docs/epics/`. Capability map: `CAPABILITY-MAP.md`. Phase status: `docs/FASE-MVP-EPIC-0-6.md`.
+
+## Current vs Target Scaffolding
+
+**Current working monorepo (do not abandon without migration plan):**
+- Backend: NestJS + Prisma + PostgreSQL → `apps/api`
+- Frontend: Vite + React + TypeScript → `apps/web` (port **5180** to avoid colliding with other local apps)
+- Local Postgres via Homebrew; Docker optional
+
+**Target layout (organize new work here; bridge from apps/):**
+```
+docs/epics/           # EPIC specs
+src/core/             # ingestion, dossier, schemas (REAL)
+src/ml/               # glosa + process_optimizer (EPIC-8)
+src/api/              # PaaS multi-tenant contracts
+src/simulation/       # DEMO only: fixtures + generators
+apps/api, apps/web    # runtime until packages are extracted
+```
+
+Frontend evolution may move to Next.js / Tailwind / Lucide / Recharts for audit dashboard — **do not rewrite the whole UI in one PR**. Incremental slices only.
+
+## Healthcare Business Logic
+
+- Enforce ANS domain: RN 510/2022, RN 507/2022, RDC 36/2013, LGPD.
+- Differentiate rules by provider type:
+  - Hospital: diárias, taxas, OPME, pacotes
+  - Clínica/SADT: consultas, procedimentos ambulatoriais
+  - Home care: diárias, escala, insumos, autorização
+  - Laboratório: lotes TUSS, pertinência, prazos
+  - Oncologia (case-base Unimed–Oncoradium): codes, aditivos, vigência retroativa
+- Catalog dimensions: basilar, cláusulas, tipos_prestação, elementos_controle/alerta, manutenção, previsibilidade, acordabilidade, plausabilidade, sinalização, monitoramento, adequação, pontos_verificação/controle — see `docs/CATALOGO-INSTRUMENTOS.md`.
+
+## Coding Rules
+
+1. Never write single-file monolithic demos that bypass modules.
+2. Every operator-facing view that can show fake data must expose an active state toggle: **[Modo Simulação Ativo] / [Produção]** (or equivalent API header `X-Rayia-Track: simulation|real`).
+3. Strict TypeScript (Zod/class-validator) or Pydantic contracts per epic boundary.
+4. Append-only dossier versions; never overwrite history.
+5. Low-confidence extraction → human review queue; never silent apply.
+6. No secrets in git; configs needing human auth: `docs/CONFIGURACOES-AUTORIZACAO.md`.
+7. Prefer vertical slices with tests (`pnpm --filter api test`).
+8. Respond to the user in Portuguese (pt-BR) unless asked otherwise; keep code identifiers in English.
+
+## Data Hygiene
+
+| Allowed in SIMULATION | Forbidden in SIMULATION |
+|---|---|
+| Synthetic TUSS codes, fake CNPJ, fake guides | Real CPF, patient names, real guide numbers from tenants |
+| Golden Unimed **commercial** contract PDFs marked case-base | Copying Jusbrasil full texts into the repo |
+
+| Allowed in REAL | Forbidden in REAL |
+|---|---|
+| Tenant uploads, checksums, audit trail | Seeding production from `src/simulation/generators` without flag |
+
+## Commands (canonical)
+
+```
+pnpm --filter api test
+pnpm --filter api start:dev    # :3000
+pnpm --filter web dev          # :5180
+brew services start postgresql@16   # local DB
+```

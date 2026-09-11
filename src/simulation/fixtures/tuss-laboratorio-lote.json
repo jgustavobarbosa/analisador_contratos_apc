@@ -1,0 +1,10 @@
+{
+  "track": "simulation",
+  "providerType": "laboratorio",
+  "lote": {
+    "quantidadeGuias": 3,
+    "codigos": ["40304361", "40304370", "40301100"],
+    "dataEnvio": "2024-09-01"
+  },
+  "notes": "Placeholder TUSS lab batch — expand in generators"
+}

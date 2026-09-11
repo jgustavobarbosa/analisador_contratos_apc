@@ -1,0 +1,50 @@
+# OPTIONAL local/CI helper — NOT the canonical deploy path.
+# Target VPS has NO Docker and already runs other systems.
+# Production/PoC on that host: bare-metal Node + native/shared Postgres.
+# See docs/VPS-BARE-METAL.md
+#
+# Budget if you do use Compose on a machine that has Docker:
+#   Postgres:     ~512MB–1GB
+#   API (host):   ~512MB
+# Do NOT add Redis, Ollama, or OCR containers here by default.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rayia-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: rayia
+      POSTGRES_PASSWORD: rayia
+      POSTGRES_DB: rayia_identity
+    # Lean memory profile for 8GB VPS
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=50
+    volumes:
+      - rayia_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rayia -d rayia_identity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+volumes:
+  rayia_pgdata:
