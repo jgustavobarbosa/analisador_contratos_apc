@@ -1,5 +1,8 @@
 name: Deploy VPS (rayia-contratos)
 
+# Ative em Settings → Secrets: VPS_HOST, VPS_USER, VPS_SSH_KEY, VPS_PORT
+# e Variables: ENABLE_VPS_DEPLOY=true
+# Sem isso, o auto-deploy da VPS (systemd timer a cada 2 min) continua sendo o caminho principal.
 on:
   push:
     branches: [main]
@@ -12,6 +15,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_VPS_DEPLOY == 'true' }}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
