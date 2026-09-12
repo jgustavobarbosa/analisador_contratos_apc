@@ -320,7 +320,7 @@ export function generateProviderProfile(
   });
 
   const partial = {
-    track: TRACK_SIMULATION as const,
+    track: TRACK_SIMULATION,
     providerType,
     generatedAt: new Date(0).toISOString(),
     seed,
